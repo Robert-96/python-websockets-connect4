@@ -2,10 +2,18 @@
 
 import asyncio
 import json
+import logging
 import secrets
 
 import websockets
 from connect4 import PLAYER1, PLAYER2, Connect4
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+handler = logging.StreamHandler()
+handler.setLevel(logging.DEBUG)
+logger.addHandler(handler)
 
 JOIN = {}
 WATCH = {}
@@ -18,7 +26,10 @@ async def error(websocket, message):
         "type": "error",
         "message": message,
     }
-    await websocket.send(json.dumps(event))
+    outbound = json.dumps(event)
+
+    logger.debug(f">>> {outbound}")
+    await websocket.send(outbound)
 
 
 async def replay(websocket, game):
@@ -35,13 +46,18 @@ async def replay(websocket, game):
             "column": column,
             "row": row,
         }
-        await websocket.send(json.dumps(event))
+        outbound = json.dumps(event)
+
+        logger.debug(f">>> {outbound}")
+        await websocket.send(outbound)
 
 
 async def play(websocket, game, player, connected):
     """Receive and process moves from a player."""
 
     async for message in websocket:
+        logger.debug(f"<<< {message}")
+
         # Parse a "play" event from the UI.
         event = json.loads(message)
         assert event["type"] == "play"
@@ -62,7 +78,10 @@ async def play(websocket, game, player, connected):
             "column": column,
             "row": row,
         }
-        websockets.broadcast(connected, json.dumps(event))
+        outbound = json.dumps(event)
+
+        logger.debug(f">>> {outbound}")
+        websockets.broadcast(connected, outbound)
 
         # If move is winning, send a "win" event.
         if game.winner is not None:
@@ -70,7 +89,10 @@ async def play(websocket, game, player, connected):
                 "type": "win",
                 "player": game.winner,
             }
-            websockets.broadcast(connected, json.dumps(event))
+            outbound = json.dumps(event)
+
+            logger.debug(f">>> {outbound}")
+            websockets.broadcast(connected, outbound)
 
 
 async def start(websocket):
@@ -95,7 +117,11 @@ async def start(websocket):
             "join": join_key,
             "watch": watch_key,
         }
-        await websocket.send(json.dumps(event))
+        outbound = json.dumps(event)
+
+        logger.debug(f">>> {outbound}")
+        await websocket.send(outbound)
+
         # Receive and process moves from the first player.
         await play(websocket, game, PLAYER1, connected)
     finally:
@@ -150,6 +176,8 @@ async def handler(websocket):
 
     # Receive and parse the "init" event from the UI.
     message = await websocket.recv()
+    logger.debug(f"<<< {message}")
+
     event = json.loads(message)
     assert event["type"] == "init"
 
